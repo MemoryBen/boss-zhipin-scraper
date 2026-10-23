@@ -201,6 +201,7 @@ python3 scripts/job_summary.py --top 15
 | `--detail-output` | Detail output path (default `~/.boss-zhipin-scraper/job-result/`) |
 | `--cdp-port` | CDP port (default 9222) |
 | `--scale/--salary/--experience/--degree` | Filters |
+| `--position` | Position category filter (e.g. `100101` = Java; comma-separated for multiple). See the full position code table [`data/position_codes.json`](data/position_codes.json) (21 categories / 118 subcategories / 848 positions, 987 codes total, synced from BOSS's official taxonomy) |
 
 ## Post-Scrape Summary & Prompt
 
@@ -239,7 +240,8 @@ boss-zhipin-scraper/
 ├── LICENSE
 ├── pyproject.toml
 ├── data/
-│   └── city_codes.json   # Full city-code map
+│   ├── city_codes.json      # Full city-code map
+│   └── position_codes.json  # Full position-category code map
 ├── scripts/
 │   ├── boss_cdp_raw.py   # Main scraping script
 │   └── job_summary.py    # Post-scrape summary + prompt
