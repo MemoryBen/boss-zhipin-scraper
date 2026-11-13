@@ -267,6 +267,185 @@ class JobSummaryTests(unittest.TestCase):
         self.assertIn("不要虚构经历", prompt)
         self.assertNotIn("匹配分", prompt)
         self.assertNotIn("分数", prompt)
+        self.assertNotIn("公司范围", prompt)
+
+    def test_summary_and_prompt_mention_company_filter(self):
+        module = load_summary_module()
+        summary = module.build_summary(
+            [{
+                "job_id": "1",
+                "title": "后端",
+                "salary": "20-40K",
+                "location": "上海·浦东新区",
+                "tags": "3-5年 | 本科",
+                "boss_name": "字节跳动",
+            }],
+            details=[],
+            search_keyword="Java",
+            city="上海",
+            company_filter="字节跳动,SHEIN",
+        )
+
+        text = module.format_summary(summary)
+        prompt = module.build_prompt(summary)
+
+        self.assertIn("公司过滤: 字节跳动,SHEIN", text)
+        self.assertIn("公司范围: 字节跳动,SHEIN", prompt)
+        self.assertEqual(summary["total_jobs"], 1)
+
+    def test_main_company_filter_drops_other_companies_and_their_details(self):
+        module = load_summary_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_path = pathlib.Path(tmp) / "boss_jobs_20260625_1200.json"
+            details_path = pathlib.Path(tmp) / "boss_details_20260625_1200.json"
+            jobs_path.write_text(json.dumps({
+                "keyword": "Java",
+                "city": "上海",
+                "jobs": [
+                    {
+                        "job_id": "1",
+                        "title": "后端",
+                        "salary": "20-40K",
+                        "location": "上海·浦东新区",
+                        "tags": "3-5年 | 本科",
+                        "boss_name": "字节跳动",
+                    },
+                    {
+                        "job_id": "2",
+                        "title": "客户端",
+                        "salary": "15-25K",
+                        "location": "上海·徐汇区",
+                        "tags": "1-3年 | 本科",
+                        "boss_name": "美团",
+                    },
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+            details_path.write_text(json.dumps([
+                {"job_id": "1", "company": "字节跳动", "skill_tags": ["Python"], "jd": "Python 服务"},
+                {"job_id": "2", "company": "美团", "skill_tags": ["RustOnlySkill"], "jd": "Rust 服务"},
+            ], ensure_ascii=False), encoding="utf-8")
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                code = module.main([
+                    "--input", str(jobs_path),
+                    "--details", str(details_path),
+                    "--company", "字节",
+                    "--summary-only",
+                ])
+
+        text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("字节跳动", text)
+        self.assertNotIn("美团", text)
+        self.assertNotIn("RustOnlySkill", text)
+        self.assertIn("公司过滤: 字节", text)
+
+    def test_main_uses_saved_company_filter_when_flag_omitted(self):
+        module = load_summary_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_path = pathlib.Path(tmp) / "boss_jobs_20260625_1200.json"
+            details_path = pathlib.Path(tmp) / "boss_details_20260625_1200.json"
+            jobs_path.write_text(json.dumps({
+                "keyword": "Java",
+                "city": "上海",
+                "company_filter": "SHEIN",
+                "jobs": [{
+                    "job_id": "1",
+                    "title": "后端",
+                    "salary": "20-40K",
+                    "location": "上海·浦东新区",
+                    "tags": "3-5年 | 本科",
+                    "boss_name": "SHEIN",
+                }],
+            }, ensure_ascii=False), encoding="utf-8")
+            details_path.write_text("[]", encoding="utf-8")
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                code = module.main([
+                    "--input", str(jobs_path),
+                    "--details", str(details_path),
+                    "--prompt-only",
+                ])
+
+        self.assertEqual(code, 0)
+        self.assertIn("公司范围: SHEIN", stdout.getvalue())
+
+    def test_main_drops_details_when_company_filter_matches_no_job(self):
+        """过滤命中 0 条时,详情也必须清空,不能把范围外公司的 JD 统计进摘要。"""
+        module = load_summary_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_path = pathlib.Path(tmp) / "boss_jobs_20260625_1200.json"
+            details_path = pathlib.Path(tmp) / "boss_details_20260625_1200.json"
+            jobs_path.write_text(json.dumps({
+                "keyword": "Java",
+                "city": "上海",
+                "jobs": [{
+                    "job_id": "1",
+                    "title": "后端",
+                    "salary": "20-40K",
+                    "location": "上海·浦东新区",
+                    "tags": "3-5年 | 本科",
+                    "boss_name": "阿里巴巴",
+                }],
+            }, ensure_ascii=False), encoding="utf-8")
+            details_path.write_text(json.dumps([
+                {
+                    "job_id": "1",
+                    "company": "阿里巴巴",
+                    "salary": "20-40K",
+                    "skill_tags": ["Spring", "Kafka"],
+                    "jd": "Java Spring Kafka 微服务",
+                },
+            ], ensure_ascii=False), encoding="utf-8")
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                code = module.main([
+                    "--input", str(jobs_path),
+                    "--details", str(details_path),
+                    "--company", "字节跳动",
+                    "--summary-only",
+                ])
+
+        text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("列表岗位: 0 条；详情 JD: 0 条", text)
+        self.assertNotIn("Spring", text)
+        self.assertNotIn("Kafka", text)
+        self.assertNotIn("微服务", text)
+
+    def test_main_drops_details_when_kept_jobs_have_no_job_id(self):
+        """命中岗位没有 job_id 时,不能退回「保留全部详情」的兜底。"""
+        module = load_summary_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs_path = pathlib.Path(tmp) / "boss_jobs_20260625_1200.json"
+            details_path = pathlib.Path(tmp) / "boss_details_20260625_1200.json"
+            jobs_path.write_text(json.dumps({
+                "keyword": "Java",
+                "city": "上海",
+                "jobs": [{
+                    "title": "后端",
+                    "salary": "20-40K",
+                    "location": "上海·浦东新区",
+                    "tags": "3-5年 | 本科",
+                    "boss_name": "字节跳动",
+                }],
+            }, ensure_ascii=False), encoding="utf-8")
+            details_path.write_text(json.dumps([
+                {"job_id": "9", "company": "美团", "skill_tags": ["RustOnlySkill"], "jd": "Rust"},
+            ], ensure_ascii=False), encoding="utf-8")
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                code = module.main([
+                    "--input", str(jobs_path),
+                    "--details", str(details_path),
+                    "--company", "字节跳动",
+                    "--summary-only",
+                ])
+
+        text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("列表岗位: 1 条；详情 JD: 0 条", text)
+        self.assertNotIn("RustOnlySkill", text)
 
     def test_summary_script_is_documented_and_packaged(self):
         readme = (ROOT_PATH / "README.md").read_text(encoding="utf-8")

@@ -1,4 +1,4 @@
-# BOSS直聘爬虫 · 职位抓取工具 v2.3（Chrome/Edge CDP / 明文薪资）
+# BOSS直聘爬虫 · 职位抓取工具 v2.4（Chrome/Edge CDP / 明文薪资）
 
 > 🌐 English documentation: [README.en.md](./README.en.md)
 
@@ -52,7 +52,8 @@ python3 scripts/job_summary.py
 
 - 明文薪资（API 模式，绕过字体反爬）
 - Boss 活跃状态独立字段（`boss_active_status`）：列表兼容 `bossOnline`→「在线」，详情可得到「刚刚活跃」等更细状态
-- 跨轮新增标记（`is_new`）：每条岗位带布尔字段标识「是否为本次新增」（终端同步以 🆕 显示），基准自动取同关键词同城市、日期早于本轮的最近一份结果；同一天多轮抓取折叠为一轮，`--diff-base` 可显式指定
+- 跨轮新增标记（`is_new`）：每条岗位带布尔字段标识「是否为本次新增」（终端同步以 🆕 显示），基准自动取同关键词同城市、公司过滤条件一致、日期早于本轮的最近一份结果；未使用 `--company` 时仍与旧结果（无公司过滤）对比；同一天多轮抓取折叠为一轮，`--diff-base` 可显式指定
+- 按公司名本地过滤（`--company`）：抓取完成后按 `boss_name` 做子串匹配，只保留目标公司；不改搜索请求、不额外发请求
 - JSON / CSV 双格式输出
 - 详情页 JD 抓取 + 技能分析
 - 抓取后聚合摘要 + 可复制提示词
@@ -131,6 +132,21 @@ npx skills add eatmoreduck/boss-zhipin-scraper
 npx clawhub@latest install @eatmoreduck/boss-zhipin-scraper
 ```
 
+### 方式 6：作为 Python 包安装（pip / uv）
+
+不装技能、当命令行工具用：直接从 Git tag 或 Release 页安装（不上 PyPI，依赖自动从 PyPI 解析），装完即有 `boss-scraper` / `boss-summary` 命令：
+
+```bash
+# 指定版本（git tag）
+pip install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+# 永远装最新 Release（固定 URL，版本以 wheel 元数据为准）
+pip install https://github.com/eatmoreduck/boss-zhipin-scraper/releases/latest/download/boss_zhipin_scraper-latest-py3-none-any.whl
+# uv（推荐，全局命令）
+uv tool install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+```
+
+完整用法见下文[「作为命令行工具使用」](#作为命令行工具使用)。
+
 ### 验证安装
 
 ```bash
@@ -145,30 +161,48 @@ ls ~/.hermes/skills/data-science/boss-zhipin-scraper/data/city_codes.json
 
 ## 作为命令行工具使用
 
-不想装成 Skill 也可以直接当 CLI 用：
+不想装成 Skill 也可以直接当 CLI 用。自 v2.4.0 起每个版本都会发布 [GitHub Release](https://github.com/eatmoreduck/boss-zhipin-scraper/releases)（附可直接安装的 whl），无需上 PyPI：
 
 ```bash
-# 1. 克隆 + 安装依赖
+# 方式 A：从 Git 安装指定版本（无需手动下载文件；依赖会自动从 PyPI 解析）
+pip install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+# uv 用户（推荐，装完即有 boss-scraper / boss-summary 全局命令）：
+uv tool install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+
+# 方式 B：从 Release 页下载 whl 直装
+pip install https://github.com/eatmoreduck/boss-zhipin-scraper/releases/download/v2.4.0/boss_zhipin_scraper-2.4.0-py3-none-any.whl
+# 或固定 URL 永远装最新 Release：
+pip install https://github.com/eatmoreduck/boss-zhipin-scraper/releases/latest/download/boss_zhipin_scraper-latest-py3-none-any.whl
+
+# 安装后直接使用入口命令
+boss-scraper --setup-chrome
+boss-scraper --check
+
+# 方式 C：克隆源码运行（不安装）
 git clone https://github.com/eatmoreduck/boss-zhipin-scraper.git
 cd boss-zhipin-scraper
 pip install -r requirements.txt
+```
 
-# 2. 启动 Chrome CDP（也可改用 --setup-edge）
+源码方式后续步骤相同：
+
+```bash
+# 启动 Chrome CDP（也可改用 --setup-edge）
 python3 scripts/boss_cdp_raw.py --setup-chrome
 # macOS 会自动选择已安装的 Google Chrome 或 /Applications/Chromium.app
 # 首次使用也不会复制主 Chrome 登录态；请在弹出的 BOSS 专用浏览器中登录 zhipin.com
 # setup 会等待登录完成，并确认接口能返回明文薪资
 
-# 3. 检查环境
+# 检查环境
 python3 scripts/boss_cdp_raw.py --check
 
 # 可选：真实浏览器/API smoke test（不写结果文件）
 python3 scripts/boss_cdp_raw.py --smoke-test
 
-# 4. 抓取
+# 抓取
 python3 scripts/boss_cdp_raw.py --keyword "AI Agent" --city 上海 --pages 3 --format csv --analysis
 
-# 5. 抓取后摘要和提示词
+# 抓取后摘要和提示词
 python3 scripts/job_summary.py --top 15
 ```
 
@@ -177,15 +211,16 @@ python3 scripts/job_summary.py --top 15
 | 参数 | 说明 |
 |------|------|
 | `--keyword` | 搜索关键词（默认 "AI Agent"） |
+| `--company` | 按公司名本地过滤已抓取结果（匹配 `boss_name` 子串，英文逗号、中文逗号或顿号分隔多家，不区分大小写）。不改搜索 URL，零额外请求。见下方说明 |
 | `--city` | 城市（中文或 9 位代码，默认上海）。**支持全国城市**（一二三四五线全覆盖，共 300+ 个），运行时自动从 BOSS 同步最新城市码；码表见 [`data/city_codes.json`](data/city_codes.json)，或用 `--list-cities` 查看。本地及在线码表均无法识别的城市名会报错退出，避免静默得到 0 条结果 |
 | `--list-cities [关键词]` | 打印支持的城市列表，可选关键词过滤，如 `--list-cities 江` |
-| `--pages` | 页数（上限 10） |
+| `--pages` | 页数（上限 20） |
 | `--format` | json / csv；csv 会同时导出列表和详情 CSV |
 | `--detail` | 抓取详情页 JD（默认开启） |
 | `--no-detail` | 不抓取详情页 |
 | `--analysis` | 分析报告 |
 | `--merge FILE` | 合并已有数据（按 job_id 去重） |
-| `--diff-base FILE` | 指定 `is_new` 对比基准文件（默认自动取同关键词同城市、文件名日期早于本轮的最近一份结果；无基准时全体视为新增） |
+| `--diff-base FILE` | 指定 `is_new` 对比基准文件（默认自动取同关键词同城市、公司过滤条件一致、文件名日期早于本轮的最近一份结果；无基准时全体视为新增；文件缺失或损坏时直接报错终止，不会静默按空基准对比） |
 | `--allow-dom-fallback` | API 无数据时允许降级 DOM 提取；默认关闭，薪资可能不可信 |
 | `--check` | 环境检查（CDP + 依赖 + 登录态） |
 | `--smoke-test` | 用真实 Chrome/CDP 跑一次 BOSS 搜索 API smoke test，不写结果文件 |
@@ -205,6 +240,18 @@ python3 scripts/job_summary.py --top 15
 | `--scale/--salary/--experience/--degree` | 筛选条件 |
 | `--position` | 职位类目筛选（如 `100101`=Java，逗号分隔可多选）。全量职类码表（21 大类 / 118 二级类目 / 848 个职位，共 987 码，同步自 BOSS 官方职类树）见 [`data/position_codes.json`](data/position_codes.json) |
 
+`--company` 是本地后处理，不进入搜索 URL，也不新增网络请求。匹配字段是列表里的 `boss_name`（来自 joblist 响应的 `brandName`；详情记录回退到 `company`），规则是**不区分大小写的子串包含**。多家公司用 `,`、`，` 或 `、` 分隔，命中任一即保留；重复片段按大小写不敏感去重。
+
+过滤发生在 `--merge` 之后、详情抓取和 `--analysis` 之前：合并进来的旧数据按同一公司范围收窄，详情只抓保留下来的岗位，分析报告只统计这些岗位。`--input` 且未加 `--output` 时只在内存中过滤，不改写原文件；抓取产生的结果文件，或显式 `--output`，会整文件替换为过滤后的集合（不会把已丢掉的公司再合并回来），并写入 `company_filter`。`is_new` 的自动基准除了同关键词、同城市，还要求 `company_filter` 归一化后一致（大小写、顺序、分隔符不敏感）。升级前没有该字段的旧文件视为「未过滤」，不带 `--company` 的抓取仍按原来的方式对比。`--diff-base` 显式指定基准时跳过这套自动匹配。终端里的逐条抓取日志仍是捕获到的全量列表，过滤条数在抓取结束后打印。
+
+```bash
+# 抓取后只保留目标公司
+python3 scripts/boss_cdp_raw.py --keyword "Java" --city 上海 --pages 3 --company "字节跳动,阿里巴巴" --analysis
+
+# 对已有 JSON 按公司重新分析，不改写原文件
+python3 scripts/boss_cdp_raw.py --input ~/.boss-zhipin-scraper/job-result/boss_jobs_20260609_1200.json --company SHEIN --analysis --no-detail
+```
+
 ## 抓取后摘要与提示词
 
 `scripts/job_summary.py` 只读取已抓取的 `boss_jobs_*.json` 和 `boss_details_*.json`，做简单聚合分析并生成一段可复制提示词。它不读取本地简历文件，不引入 PDF 依赖，也不给个人与岗位做分数判断。
@@ -221,6 +268,9 @@ python3 scripts/job_summary.py \
 
 # 只输出提示词
 python3 scripts/job_summary.py --prompt-only
+
+# 摘要前按公司名过滤（与抓取命令的 --company 规则相同，纯本地）
+python3 scripts/job_summary.py --company "字节跳动,SHEIN"
 ```
 
 打包安装后也可以使用入口命令：
@@ -332,6 +382,12 @@ MIT
 ## 友情链接
 
 - [LINUX DO](https://linux.do/) — 真诚、友善、充满活力的技术社区，本项目认可并推荐。
+
+## 作者
+
+eatmoreduck 多吃鸭 — 上海风控架构师，10 年全栈、7 年风控研发。
+
+[主页](https://www.eatmoreduck.com) · [博客](https://blog.xiaohuangyu.space) · [X](https://x.com/eatmoreduck98)
 
 ## Star History
 

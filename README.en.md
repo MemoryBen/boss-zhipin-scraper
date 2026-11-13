@@ -1,4 +1,4 @@
-# BOSS Zhipin Scraper · Job Crawler v2.3 (Chrome/Edge CDP / Plaintext Salary)
+# BOSS Zhipin Scraper · Job Crawler v2.4 (Chrome/Edge CDP / Plaintext Salary)
 
 > 🌐 中文文档：[README.md](./README.md)
 
@@ -50,7 +50,8 @@ Right after scraping you get: salary ranges, experience requirements, top skill 
 
 - Plaintext salary (API mode, bypasses font-based obfuscation)
 - Boss activity status as a separate field (`boss_active_status`): list maps `bossOnline`→"在线"; detail can provide finer labels like "刚刚活跃"
-- Cross-run new-job flag (`is_new`): every job carries a boolean marking whether it is new to this run (also shown as 🆕 in the terminal); the baseline defaults to the most recent prior result with the same keyword and city whose filename date is before today; multiple runs on the same day fold into one round; use `--diff-base` to override
+- Cross-run new-job flag (`is_new`): every job carries a boolean marking whether it is new to this run (also shown as 🆕 in the terminal); the baseline defaults to the most recent prior result with the same keyword, city, and company filter whose filename date is before today; runs without `--company` still compare against older files that have no company filter; multiple runs on the same day fold into one round; use `--diff-base` to override
+- Local company filter (`--company`): after scraping, keep jobs whose `boss_name` contains the given name; the search request is unchanged and no extra request is sent
 - Dual JSON / CSV output
 - Detail-page JD scraping + skill analysis
 - Aggregated summary + copy-paste prompt after scraping
@@ -129,6 +130,21 @@ The skill is published on [ClawHub](https://clawhub.ai), the skill registry of t
 npx clawhub@latest install @eatmoreduck/boss-zhipin-scraper
 ```
 
+### Option 6: Install as a Python package (pip / uv)
+
+Skip the skill form and use it as a plain CLI: install straight from a Git tag or the Release page (no PyPI — deps resolve from PyPI automatically). This gives you the `boss-scraper` / `boss-summary` commands:
+
+```bash
+# A pinned version (git tag)
+pip install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+# Always the latest release (fixed URL; version comes from the wheel metadata)
+pip install https://github.com/eatmoreduck/boss-zhipin-scraper/releases/latest/download/boss_zhipin_scraper-latest-py3-none-any.whl
+# uv (recommended, global commands)
+uv tool install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+```
+
+See [Use as a CLI tool](#use-as-a-cli-tool) below for full usage.
+
 ### Verify the installation
 
 ```bash
@@ -143,30 +159,48 @@ After installing, just say in a Hermes conversation: "Search BOSS Zhipin for AI 
 
 ## Use as a CLI tool
 
-You don't have to install it as a Skill — use it as a plain CLI:
+You don't have to install it as a Skill — use it as a plain CLI. Since v2.4.0 every version ships as a [GitHub Release](https://github.com/eatmoreduck/boss-zhipin-scraper/releases) with a directly installable wheel — no PyPI needed:
 
 ```bash
-# 1. Clone + install deps
+# Option A: install a tagged version straight from Git (no manual download; deps resolve from PyPI)
+pip install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+# uv users (recommended — gives you the boss-scraper / boss-summary commands globally):
+uv tool install "git+https://github.com/eatmoreduck/boss-zhipin-scraper.git@v2.4.0"
+
+# Option B: install the wheel from the Release page
+pip install https://github.com/eatmoreduck/boss-zhipin-scraper/releases/download/v2.4.0/boss_zhipin_scraper-2.4.0-py3-none-any.whl
+# Or a fixed URL that always installs the latest release:
+pip install https://github.com/eatmoreduck/boss-zhipin-scraper/releases/latest/download/boss_zhipin_scraper-latest-py3-none-any.whl
+
+# Use the entry commands after installing
+boss-scraper --setup-chrome
+boss-scraper --check
+
+# Option C: clone the source and run it without installing
 git clone https://github.com/eatmoreduck/boss-zhipin-scraper.git
 cd boss-zhipin-scraper
 pip install -r requirements.txt
+```
 
-# 2. Start Chrome CDP (or use --setup-edge)
+The remaining steps are the same for the source clone:
+
+```bash
+# Start Chrome CDP (or use --setup-edge)
 python3 scripts/boss_cdp_raw.py --setup-chrome
 # macOS automatically selects an installed Google Chrome or /Applications/Chromium.app
 # First run won't copy your main Chrome session; log in to zhipin.com in the dedicated BOSS browser that pops up
 # setup waits for login to finish and confirms the API returns plaintext salaries
 
-# 3. Check the environment
+# Check the environment
 python3 scripts/boss_cdp_raw.py --check
 
 # Optional: real browser/API smoke test (writes no result files)
 python3 scripts/boss_cdp_raw.py --smoke-test
 
-# 4. Scrape
+# Scrape
 python3 scripts/boss_cdp_raw.py --keyword "AI Agent" --city 上海 --pages 3 --format csv --analysis
 
-# 5. Summary + prompt after scraping
+# Summary + prompt after scraping
 python3 scripts/job_summary.py --top 15
 ```
 
@@ -175,15 +209,16 @@ python3 scripts/job_summary.py --top 15
 | Parameter | Description |
 |-----------|-------------|
 | `--keyword` | Search keyword (default "AI Agent") |
+| `--company` | Locally filter scraped jobs by company name (`boss_name` substring; split several companies on comma or ideographic enumeration comma; case-insensitive). Does not change the search URL and sends no extra request. See below |
 | `--city` | City (Chinese name or 9-digit code, default Shanghai). **Supports cities nationwide** (300+, incl. tier-3/4/5); city codes auto-sync from BOSS at runtime. See [`data/city_codes.json`](data/city_codes.json), or run `--list-cities`. An unrecognized city name now exits with an error instead of silently producing zero results |
 | `--list-cities [keyword]` | Print the supported city list, optional keyword filter, e.g. `--list-cities 江` |
-| `--pages` | Number of pages (max 10) |
+| `--pages` | Number of pages (max 20) |
 | `--format` | json / csv; csv also exports list and detail CSVs |
 | `--detail` | Scrape detail-page JD (on by default) |
 | `--no-detail` | Do not scrape detail pages |
 | `--analysis` | Analysis report |
 | `--merge FILE` | Merge existing data (deduped by job_id) |
-| `--diff-base FILE` | Explicit baseline file for `is_new` (defaults to the most recent prior result with the same keyword and city whose filename date is before today; with no baseline, all jobs are treated as new) |
+| `--diff-base FILE` | Explicit baseline file for `is_new` (defaults to the most recent prior result with the same keyword, city, and company filter whose filename date is before today; with no baseline, all jobs are treated as new; a missing or corrupt baseline file aborts the run instead of silently diffing against an empty baseline) |
 | `--allow-dom-fallback` | Allow DOM extraction fallback when the API has no data; off by default, salaries may be unreliable |
 | `--check` | Environment check (CDP + deps + login state) |
 | `--smoke-test` | Run one real Chrome/CDP BOSS search API smoke test, writes no result files |
@@ -203,6 +238,18 @@ python3 scripts/job_summary.py --top 15
 | `--scale/--salary/--experience/--degree` | Filters |
 | `--position` | Position category filter (e.g. `100101` = Java; comma-separated for multiple). See the full position code table [`data/position_codes.json`](data/position_codes.json) (21 categories / 118 subcategories / 848 positions, 987 codes total, synced from BOSS's official taxonomy) |
 
+`--company` is local post-processing. It does not change the search URL and does not send any extra request. The matched field is `boss_name` on list rows (the joblist response's `brandName`; detail rows fall back to `company`). Matching is a **case-insensitive substring**. Separate several companies with `,`, `，`, or `、`; a job is kept when any fragment matches. Duplicate fragments are collapsed case-insensitively.
+
+The filter runs after `--merge` and before detail scraping and `--analysis`: merged history is narrowed to the same companies, details are fetched only for the kept jobs, and the analysis report counts only those jobs. With `--input` and no `--output`, the filter stays in memory and does not rewrite the source file. A file this run scraped, or an explicit `--output`, is replaced wholesale by the filtered set (dropped companies are not merged back in) and records `company_filter`. The automatic `is_new` baseline matches keyword, city, and the normalized `company_filter` (case, order, and separator do not matter). Older files that lack the field count as "no company filter", so a run without `--company` still diffs the way it did before. An explicit `--diff-base` skips that automatic match. The per-job log printed during capture is still the full list; the filtered count is printed after capture finishes.
+
+```bash
+# Keep only the target companies after scraping
+python3 scripts/boss_cdp_raw.py --keyword "Java" --city 上海 --pages 3 --company "字节跳动,阿里巴巴" --analysis
+
+# Re-analyze an existing JSON by company without rewriting it
+python3 scripts/boss_cdp_raw.py --input ~/.boss-zhipin-scraper/job-result/boss_jobs_20260609_1200.json --company SHEIN --analysis --no-detail
+```
+
 ## Post-Scrape Summary & Prompt
 
 `scripts/job_summary.py` only reads the already-scraped `boss_jobs_*.json` and `boss_details_*.json`, does simple aggregation, and produces a copy-paste prompt. It never reads your local résumé file, pulls in no PDF dependency, and never scores a person against a job.
@@ -219,6 +266,9 @@ python3 scripts/job_summary.py \
 
 # Only emit the prompt
 python3 scripts/job_summary.py --prompt-only
+
+# Filter by company name before summarizing (same rules as the scraper --company; local only)
+python3 scripts/job_summary.py --company "字节跳动,SHEIN"
 ```
 
 After installing the package you can also use the entry command:
@@ -331,6 +381,12 @@ Every line of this project was written by AI agents burning tokens — so a tip 
 ## Friends
 
 - [LINUX DO](https://linux.do/) — A sincere, friendly, and vibrant tech community. This project endorses and recommends it.
+
+## Author
+
+eatmoreduck 多吃鸭 — Risk-control architect in Shanghai; 10 years full-stack, 7 years in risk-control engineering.
+
+[Homepage](https://www.eatmoreduck.com) · [Blog](https://blog.xiaohuangyu.space) · [X](https://x.com/eatmoreduck98)
 
 ## Star History
 

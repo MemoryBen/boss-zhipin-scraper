@@ -1,7 +1,7 @@
 ---
 name: boss-zhipin-scraper
-description: "Scrape BOSS直聘 (job listing site) via Chrome CDP. Searches jobs by keyword/city/filters, fetches JD details, outputs structured JSON/CSV with plaintext salary, and can summarize scraped results into a job-market prompt. Use when user wants to search/analyze jobs on BOSS直聘 or zhipin.com."
-version: 2.3.1
+description: "Scrape BOSS直聘 (job listing site) via Chrome CDP. Searches jobs by keyword/city/filters, fetches JD details, outputs structured JSON/CSV with plaintext salary, and can summarize scraped results into a job-market prompt. Optional --company locally filters results by company name (boss_name substring) with no extra request. Use when user wants to search/analyze jobs on BOSS直聘 or zhipin.com."
+version: 2.4.0
 author: eatmoreduck
 license: MIT
 platforms: [macos, linux]
@@ -123,6 +123,12 @@ python3 "$SCRIPT_PATH" --smoke-test --cdp-port 9222
 
 # 合并多次抓取（去重）
 python3 "$SCRIPT_PATH" --keyword "关键词" --city 北京 --pages 3 --merge ~/.boss-zhipin-scraper/job-result/jobs.json --output ~/.boss-zhipin-scraper/job-result/jobs_merged.json
+
+# 按公司名本地过滤（boss_name 子串，不额外请求；多家用逗号分隔）
+python3 "$SCRIPT_PATH" --keyword "关键词" --city 上海 --pages 3 --company "字节跳动,阿里巴巴" --analysis
+
+# 对已有结果按公司做摘要
+python3 "$SUMMARY_PATH" --company "字节跳动,SHEIN" --top 15
 ```
 
 默认输出到 `~/.boss-zhipin-scraper/job-result/` 目录，`--format csv` 会给列表和详情都额外生成 `.csv` 文件。`--smoke-test` 只验证真实 Chrome/CDP 能否拿到 API 明文薪资，不写结果文件。
@@ -154,7 +160,8 @@ python3 "$SUMMARY_PATH" \
 |------|--------|------|
 | `--keyword` | AI Agent | 搜索关键词 |
 | `--city` | 上海 | 城市名（中文）或 9 位代码；没传时默认上海，无法识别的城市名会报错退出 |
-| `--pages` | 3 | 抓取页数（上限 10，每页 30 条） |
+| `--company` | - | 按公司名本地过滤（`boss_name` 子串，逗号或顿号分隔多家，不区分大小写）。不改搜索请求；过滤在 `--merge` 之后、详情与分析之前。`is_new` 自动基准同时要求公司过滤条件一致。`job_summary.py` 接受同一参数 |
+| `--pages` | 3 | 抓取页数（上限 20，每页 15 条） |
 | `--output` | ~/.boss-zhipin-scraper/job-result/... | 列表输出路径 |
 | `--detail-output` | ~/.boss-zhipin-scraper/job-result/... | 详情输出路径 |
 | `--format` | json | 输出格式: json / csv；csv 同时导出列表和详情 CSV |
@@ -261,7 +268,7 @@ python3 "$SCRIPT_PATH" --setup-chrome --reset-chrome-profile --cdp-port 9222
 ## 注意事项
 
 - 仅用于个人求职研究
-- 单次最多 10 页（300 条），防封号
+- 单次最多 20 页（300 条），防封号
 - 翻页间隔 12-22 秒随机延迟，3 页约 1 分钟
 - 详情页每条 10-25 秒，10 条约 3-5 分钟
 - BOSS直聘可能更新 API 路径，失效时需更新脚本中 `API_JOB_LIST_PATH` 常量

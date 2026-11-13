@@ -1,5 +1,23 @@
 # Changelog
 
+## 未发布
+
+### 新增
+- 一键发版工作流（#107 后续）：`make-release.yml`（Actions → Run workflow 填版本号）自动完成版本四处对齐 + `uv lock` + CHANGELOG 定版 + 全量单测，并推好 `release/vX.Y.Z` 分支给出开 PR 链接；`release.yml` 改为双路触发——release PR 合并进 master 时按提交首行识别 `chore(release): x.y.z` 自动补打 tag 并构建发布（手动 `git push tag v*` 的老路继续可用），发版手动动作只剩「开 PR 并合并」。事件链刻意不依赖 GITHUB_TOKEN 触发下游（GitHub 防递归会吞掉 bot 开的 PR/推的 tag，且本仓库分支保护对管理员也强制必需 check）。`release.yml` 现额外附稳定文件名的 `boss_zhipin_scraper-latest-py3-none-any.whl`，支持 `releases/latest/download/` 固定 URL 永远装最新版（pip 以 wheel 元数据识别版本，实测通过）。README 双语「安装」章节新增方式 6（pip / uv 直接安装），CLI 章节补 latest 固定 URL。`package-skill.sh` 的 `sed -i` 改为 BSD/GNU 双平台兼容（make-release 在 ubuntu 上复用该脚本）
+
+## 2.4.0 (2026-11-03)
+
+### 新增
+- GitHub Release 发布流水线（#107）：push tag `v*` 自动跑发版门禁（`uv sync --locked` + py_compile + 全量单测）→ `uv build` 产出 whl/sdist → 创建 GitHub Release 并附产物，release notes 自动抽取 CHANGELOG 对应版本段落。`package-skill.sh bump` 现同步更新 `pyproject.toml` 与 README 双语标题版本（并提醒 `uv lock`），发版时四处版本号精确一致（一致性门禁从两处加严到三处）。主包经 GitHub 分发不上 PyPI（包名含 boss-zhipin，规避公开市场商标/合规风险），依赖仍由 pip 从 PyPI 解析；README 双语新增 pip/uv 直接安装说明（git+tag、Release whl、`uv tool install`）。本版本为首个经流水线发布的版本
+- `--company` 本地公司名过滤（#97 方案 2）：对已抓取结果的 `boss_name`（joblist 的 `brandName`）做不区分大小写的子串匹配，英文逗号、中文逗号或顿号分隔多家，命中任一即保留。纯本地后处理，不改搜索请求、零额外请求。过滤发生在 `--merge` 之后、详情抓取和 `--analysis` 之前，因此详情只抓保留下来的岗位；`--input` 未加 `--output` 时不改写原文件。结果 JSON 写入 `company_filter`。`is_new` 自动基准在同关键词同城市之外，还要求公司过滤条件一致（大小写与顺序不敏感；旧文件没有该字段视为未过滤），避免不同公司维度互 diff。`--diff-base` 仍可显式指定基准。`job_summary.py` 接受同一个 `--company`，摘要和提示词会带上公司范围
+
+### 变更
+- 单关键词单次抓取页数上限从 10 页放宽到 20 页（#94）：默认页数仍为 3；`hasMore` 提前停止、随机等待、全局 500 次请求保护与安全验证人工处理逻辑不变。纯 CLI 上限调整，不涉列表被动捕获与详情链路
+
+### 修复
+- `--diff-base` 显式指定的基准文件缺失/损坏时不再静默按空基准对比（#90 第 1 条）：`load_base_ids` 现将「加载失败」与「合法但零已见」区分（失败返回 None，结构校验收紧为 dict 且 jobs 为列表），显式路径加载失败直接终止并提示检查路径，不再产出整轮 `is_new=true` 的误标结果；自动基准在扫描与读取之间的罕见竞态也会在终端明示后按无基准继续。自动选取与合法基准的对比行为不变
+- `--company` 命中 0 条时，详情统计不再越界：`filter_details_to_jobs` 在岗位列表为空时直接返回空详情；`job_summary.py` 过滤岗位后同步收窄详情。此前 `build_summary` 的 `job_id` 对齐在岗位为空或命中岗位缺少 `job_id` 时会保留全部详情，导致范围外公司的 JD 计入技能与高频词统计
+
 ## 2.3.1 (2026-10-14)
 
 ### 变更
